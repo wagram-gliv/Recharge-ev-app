@@ -1,6 +1,6 @@
 import { APP_CONFIG } from './config.js';
 
-const ORS_BASE = 'https://api.openrouteservice.org';
+const ORS_BASE = 'https://api.heigit.org';
 
 async function geocode(place) {
   const key = APP_CONFIG.ORS_API_KEY || window.__APP_CONFIG__?.ORS_API_KEY;
