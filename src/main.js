@@ -74,18 +74,6 @@ form.addEventListener('submit', async (e) => {
       messagesEl.innerHTML += msg('API cartographie indisponible: route mockée utilisée.', 'warn');
     }
 
-    let chosenChargers = [];
-    let usedThreshold = null;
-    for (const threshold of APP_CONFIG.CHARGER_POWER_STEPS_KW) {
-      const candidates = await getChargersAlongRoute({ tripDistanceKm: route.distanceKm, minPowerKw: threshold });
-      if (candidates.length) { chosenChargers = candidates; usedThreshold = threshold; break; }
-    }
-
-    if (!chosenChargers.length) {
-      messagesEl.innerHTML += msg('Aucune borne >100kW, >43kW ou >20kW trouvée. Rechargez avant départ ou élargissez les critères.', 'error');
-      return;
-    }
-
     const estimateSoc = (distanceKm) => estimateSocAtDistance({
       batteryCapacity: input.batteryCapacity,
       availableEnergy: auto.availableEnergy,
@@ -93,8 +81,31 @@ form.addEventListener('submit', async (e) => {
       distanceKm
     });
 
-    const secure = chooseRecommendation(chosenChargers, 15, 25, auto.safeRangeKm, estimateSoc);
-    const advanced = chooseRecommendation(chosenChargers, 5, 15, auto.advancedRangeKm, estimateSoc);
+    let chosenChargers = [];
+    let usedThreshold = null;
+    let secure = null;
+    let advanced = null;
+
+    for (const threshold of APP_CONFIG.CHARGER_POWER_STEPS_KW) {
+      const candidates = await getChargersAlongRoute({ tripDistanceKm: route.distanceKm, minPowerKw: threshold });
+      if (!candidates.length) continue;
+
+      const secureCandidate = chooseRecommendation(candidates, 15, 25, auto.safeRangeKm, estimateSoc);
+      const advancedCandidate = chooseRecommendation(candidates, 5, 15, auto.advancedRangeKm, estimateSoc);
+
+      if (secureCandidate || advancedCandidate) {
+        chosenChargers = candidates;
+        usedThreshold = threshold;
+        secure = secureCandidate;
+        advanced = advancedCandidate;
+        break;
+      }
+    }
+
+    if (!chosenChargers.length) {
+      messagesEl.innerHTML += msg('Aucune borne atteignable trouvée sur les paliers >100kW, >43kW ou >20kW. Rechargez avant départ ou élargissez les critères.', 'error');
+      return;
+    }
 
     const block = (title, data) => data ? `<div class="card"><h3>${title}</h3><p><b>${data.name}</b><br>${data.address}<br>Puissance: ${data.powerKw} kW<br>Distance origine: ${km(data.distanceFromStartKm)}<br>Restant: ${km(data.distanceToDestinationKm)}<br>SOC estimé: ${pct(data.socAtArrival)}</p></div>` : `<div class="card"><h3>${title}</h3><p>Aucune borne atteignable.</p></div>`;
 
