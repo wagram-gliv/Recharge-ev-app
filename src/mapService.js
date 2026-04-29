@@ -1,6 +1,6 @@
 import { APP_CONFIG } from './config.js';
 
-const DEFAULT_ORS_BASE = 'https://api.openrouteservice.org';
+const DEFAULT_ORS_BASE = 'https://api.heigit.org';
 
 function resolveBaseUrl() {
   const raw = APP_CONFIG.ORS_BASE_URL || window.__APP_CONFIG__?.ORS_BASE_URL || DEFAULT_ORS_BASE;
