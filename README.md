@@ -15,6 +15,10 @@ Par défaut, l'app bascule sur un trajet mocké si aucune clé API n'est configu
 
 Pour activer OpenRouteService:
 1. Renseigner `ORS_API_KEY` dans `src/config.js`.
+2. Vérifier `ORS_BASE_URL` (défaut: `https://api.openrouteservice.org`, alternative: `https://api.heigit.org`).
+3. Recharger la page puis relancer un calcul.
+
+Si le message de fallback apparaît encore, l'erreur HTTP est affichée (ex: `ROUTE_ERROR_401`, `GEOCODE_ERROR_403`) pour diagnostiquer clé invalide, restrictions ou quota.
 2. Recharger la page.
 
 ## Données de test
