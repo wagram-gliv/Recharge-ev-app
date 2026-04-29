@@ -69,9 +69,9 @@ form.addEventListener('submit', async (e) => {
     let route;
     try {
       route = await getRoute(input.origin, input.destination);
-    } catch (routeErr) {
+    } catch {
       route = { distanceKm: 320, start: [2.3522, 48.8566], end: [4.8357, 45.764], geometry: [[2.3522,48.8566],[3.1,47.9],[4.1,46.7],[4.8357,45.764]] };
-      messagesEl.innerHTML += msg(`API cartographie indisponible (${routeErr.message}): route mockée utilisée.`, 'warn');
+      messagesEl.innerHTML += msg('API cartographie indisponible: route mockée utilisée.', 'warn');
     }
 
     let chosenChargers = [];

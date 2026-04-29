@@ -19,6 +19,7 @@ Pour activer OpenRouteService:
 3. Recharger la page puis relancer un calcul.
 
 Si le message de fallback apparaît encore, l'erreur HTTP est affichée (ex: `ROUTE_ERROR_401`, `GEOCODE_ERROR_403`) pour diagnostiquer clé invalide, restrictions ou quota.
+2. Recharger la page.
 
 ## Données de test
 - Batterie: `77`
