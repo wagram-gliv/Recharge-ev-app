@@ -69,21 +69,9 @@ form.addEventListener('submit', async (e) => {
     let route;
     try {
       route = await getRoute(input.origin, input.destination);
-    } catch (routeErr) {
+    } catch {
       route = { distanceKm: 320, start: [2.3522, 48.8566], end: [4.8357, 45.764], geometry: [[2.3522,48.8566],[3.1,47.9],[4.1,46.7],[4.8357,45.764]] };
-      messagesEl.innerHTML += msg(`API cartographie indisponible (${routeErr.message}): route mockée utilisée.`, 'warn');
-    }
-
-    let chosenChargers = [];
-    let usedThreshold = null;
-    for (const threshold of APP_CONFIG.CHARGER_POWER_STEPS_KW) {
-      const candidates = await getChargersAlongRoute({ tripDistanceKm: route.distanceKm, minPowerKw: threshold });
-      if (candidates.length) { chosenChargers = candidates; usedThreshold = threshold; break; }
-    }
-
-    if (!chosenChargers.length) {
-      messagesEl.innerHTML += msg('Aucune borne >100kW, >43kW ou >20kW trouvée. Rechargez avant départ ou élargissez les critères.', 'error');
-      return;
+      messagesEl.innerHTML += msg('API cartographie indisponible: route mockée utilisée.', 'warn');
     }
 
     const estimateSoc = (distanceKm) => estimateSocAtDistance({
@@ -93,8 +81,31 @@ form.addEventListener('submit', async (e) => {
       distanceKm
     });
 
-    const secure = chooseRecommendation(chosenChargers, 15, 25, auto.safeRangeKm, estimateSoc);
-    const advanced = chooseRecommendation(chosenChargers, 5, 15, auto.advancedRangeKm, estimateSoc);
+    let chosenChargers = [];
+    let usedThreshold = null;
+    let secure = null;
+    let advanced = null;
+
+    for (const threshold of APP_CONFIG.CHARGER_POWER_STEPS_KW) {
+      const candidates = await getChargersAlongRoute({ tripDistanceKm: route.distanceKm, minPowerKw: threshold });
+      if (!candidates.length) continue;
+
+      const secureCandidate = chooseRecommendation(candidates, 15, 25, auto.safeRangeKm, estimateSoc);
+      const advancedCandidate = chooseRecommendation(candidates, 5, 15, auto.advancedRangeKm, estimateSoc);
+
+      if (secureCandidate || advancedCandidate) {
+        chosenChargers = candidates;
+        usedThreshold = threshold;
+        secure = secureCandidate;
+        advanced = advancedCandidate;
+        break;
+      }
+    }
+
+    if (!chosenChargers.length) {
+      messagesEl.innerHTML += msg('Aucune borne atteignable trouvée sur les paliers >100kW, >43kW ou >20kW. Rechargez avant départ ou élargissez les critères.', 'error');
+      return;
+    }
 
     const block = (title, data) => data ? `<div class="card"><h3>${title}</h3><p><b>${data.name}</b><br>${data.address}<br>Puissance: ${data.powerKw} kW<br>Distance origine: ${km(data.distanceFromStartKm)}<br>Restant: ${km(data.distanceToDestinationKm)}<br>SOC estimé: ${pct(data.socAtArrival)}</p></div>` : `<div class="card"><h3>${title}</h3><p>Aucune borne atteignable.</p></div>`;
 

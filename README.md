@@ -19,6 +19,7 @@ Pour activer OpenRouteService:
 3. Recharger la page puis relancer un calcul.
 
 Si le message de fallback apparaît encore, l'erreur HTTP est affichée (ex: `ROUTE_ERROR_401`, `GEOCODE_ERROR_403`) pour diagnostiquer clé invalide, restrictions ou quota.
+2. Recharger la page.
 
 ## Données de test
 - Batterie: `77`
@@ -71,19 +72,3 @@ Vous n'avez pas besoin de terminal sur iPhone. Faites uniquement ces actions dan
    - `https://votre-projet.vercel.app/index.html`
 
 Si le log affiche encore `Commit: 2399bb9`, Vercel déploie toujours un ancien `main` (la fusion vers `main` n'est pas passée).
-
-
-## Script ultra-simple à copier (iPhone, sans terminal)
-
-Si vous êtes sur iPhone, faites exactement ces clics:
-
-1. **GitHub** → repo `Recharge-ev-app` → **Pull requests** → **New pull request**.
-2. Sélectionnez **base: `main`** et **compare: `work`** puis **Create pull request**.
-3. Ouvrez la PR puis cliquez **Merge pull request** puis **Confirm merge**.
-4. **Vercel** → projet → **Settings** → **Git** → mettez **Production Branch = `main`**.
-5. **Vercel** → **Deployments** → ouvrez le dernier déploiement → **Redeploy** (*without cache*).
-6. Ouvrez ensuite:
-   - `https://votre-projet.vercel.app/`
-   - `https://votre-projet.vercel.app/index.html`
-
-Si ça ne marche pas: dans le log Vercel, la ligne **Commit** doit être un commit récent (et pas `2399bb9`).
