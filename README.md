@@ -43,6 +43,18 @@ L'application étant 100 % côté client, la clé est visible dans le navigateur
 - Départ `Paris, France` → Arrivée `Lyon, France`
 - Véhicule : batterie `77` kWh, charge `62` %, conso `18` kWh/100 km
 
+## Déploiement VPS — https://charge.gliv.fr
+Pile Docker `charge` sur le VPS (`51.75.143.97`, utilisateur `deploy`), fichiers dans `deploy/vps/` :
+- `docker-compose.yml` : un conteneur `charge-web` (`caddy:2-alpine`) qui sert le dépôt monté en lecture seule, joint au réseau `app_default` du Caddy frontal partagé (`~/max-platform/max-platform/Caddyfile`, projet `app`).
+- `Caddyfile` : ne sert que `index.html`, `styles.css`, `src/` ; tout autre chemin renvoie `index.html` ; `Cache-Control: no-cache`.
+- `deploy.sh` : `git reset --hard origin/main` + `docker compose up -d`.
+
+Mise à jour après un push sur `main` :
+```bash
+ssh deploy@51.75.143.97 ~/apps/charge/deploy/vps/deploy.sh
+```
+Le bloc `charge.gliv.fr { tls internal … reverse_proxy charge-web:80 }` est dans le Caddyfile frontal. Le domaine est proxifié par Cloudflare (mode Full) : le défi ACME HTTP est redirigé par Cloudflare, d'où le certificat interne côté origine. Si le DNS passe en « DNS only », retirer `tls internal` pour obtenir un certificat Let's Encrypt (`docker exec app-caddy-1 caddy reload --config /etc/caddy/Caddyfile`).
+
 ## Déploiement Vercel
 Site statique : **Framework Preset** = `Other`, **Root Directory** = `.`, Build/Output vides. `vercel.json` force le fallback vers `index.html`.
 
