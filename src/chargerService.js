@@ -11,7 +11,7 @@ const OVERPASS_URLS = [
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.private.coffee/api/interpreter'
 ];
-const CORRIDOR_KM = 15; // pré-filtre à vol d'oiseau ; le détour routier réel (10 km / 15 min) est vérifié ensuite
+export const CORRIDOR_KM = 15; // pré-filtre à vol d'oiseau ; le détour routier réel (10 km / 15 min) est vérifié ensuite
 const SHOP_RADIUS_M = 120; // une borne à moins de 120 m d'un magasin Lidl est considérée "sur site Lidl"
 const SHOPS_PER_QUERY = 100;
 const SITE_RADIUS_KM = 0.08; // OSM cartographie souvent chaque point de charge séparément : on regroupe les bornes d'un même parking
@@ -127,12 +127,14 @@ async function loadOverpass(query) {
   throw new Error(`La base OpenStreetMap est momentanément indisponible (${errors.join(' · ')}). Réessayez dans quelques instants.`);
 }
 
-// Fusionne les bornes distantes de moins de SITE_RADIUS_KM en un seul site : puissance max, nombre de bornes,
-// site « hors service » seulement si toutes ses bornes le sont, tarif « mixed » si les bornes divergent.
-export function groupSites(stations) {
+// Fusionne les bornes d'un même site : puissance max, nombre de bornes, site « hors service » seulement si toutes
+// ses bornes le sont, tarif « mixed » si les bornes divergent. Par défaut deux bornes à moins de SITE_RADIUS_KM
+// forment un site ; `sameSite(site, station)` permet un autre critère (ex. identifiant de station IRVE).
+const byDistance = (site, station) => distanceKm([site.lon, site.lat], [station.lon, station.lat]) <= SITE_RADIUS_KM;
+export function groupSites(stations, sameSite = byDistance) {
   const sites = [];
   for (const station of stations) {
-    const site = sites.find((s) => distanceKm([s.lon, s.lat], [station.lon, station.lat]) <= SITE_RADIUS_KM);
+    const site = sites.find((s) => sameSite(s, station));
     if (!site) { sites.push({ ...station, count: 1, ids: [station.id] }); continue; }
     site.count++;
     site.ids.push(station.id);
@@ -191,6 +193,7 @@ export async function getChargersAlongRoute(route, onProgress = () => {}) {
       lat, lon,
       powerKw: powerFromTags(tags),
       ...statusFromTags(tags),
+      source: 'osm',
       fee: tags.fee === 'no' ? 'free' : tags.fee === 'yes' ? 'paid' : 'unknown',
       access: tags.access || 'unknown',
       operator: tags.operator || tags.brand || tags.network || '',

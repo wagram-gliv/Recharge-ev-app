@@ -46,32 +46,48 @@ async function route(startLonLat, endLonLat) {
 // une seule requête par lot de 25 paires au lieu d'une requête Directions par borne (quota gratuit ≈ 40-50/min).
 const MATRIX_BATCH = 25;
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function matrixBatch(base, key, batch) {
+  const response = await fetch(`${base}/v2/matrix/driving-car`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: key },
+    body: JSON.stringify({
+      locations: [...batch.map((c) => c.anchor), ...batch.map((c) => [c.lon, c.lat])],
+      sources: batch.map((_, i) => i),
+      destinations: batch.map((_, i) => batch.length + i),
+      metrics: ['distance', 'duration'],
+      units: 'km'
+    })
+  });
+  if (!response.ok) throw new Error(`MATRIX_${response.status}`);
+  const data = await response.json();
+  return batch.map((_, i) => {
+    const km = data.distances?.[i]?.[i], seconds = data.durations?.[i]?.[i];
+    return Number.isFinite(km) && Number.isFinite(seconds) ? { detourKm: km, detourMinutes: seconds / 60 } : null;
+  });
+}
+
+// Un lot en échec est retenté une fois, puis coupé en deux jusqu'à la paire seule : un point non routable
+// (ou une erreur passagère) ne fait plus perdre les 24 autres sites du lot.
+async function resilientBatch(base, key, batch, attempt = 0) {
+  try {
+    return await matrixBatch(base, key, batch);
+  } catch (error) {
+    if (attempt === 0) { await sleep(1500); return resilientBatch(base, key, batch, 1); }
+    if (batch.length === 1) { console.warn('Détour non vérifiable pour', batch[0].name, error.message); return [null]; }
+    const half = Math.ceil(batch.length / 2);
+    return [...await resilientBatch(base, key, batch.slice(0, half), 1), ...await resilientBatch(base, key, batch.slice(half), 1)];
+  }
+}
+
 export async function getDrivingDetours(chargers) {
   const key = resolveKey();
   const base = resolveBaseUrl();
   if (!key) throw new Error('NO_ORS_KEY');
-  const results = new Array(chargers.length).fill(null);
+  const results = [];
   for (let offset = 0; offset < chargers.length; offset += MATRIX_BATCH) {
-    const batch = chargers.slice(offset, offset + MATRIX_BATCH);
-    try {
-      const response = await fetch(`${base}/v2/matrix/driving-car`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: key },
-        body: JSON.stringify({
-          locations: [...batch.map((c) => c.anchor), ...batch.map((c) => [c.lon, c.lat])],
-          sources: batch.map((_, i) => i),
-          destinations: batch.map((_, i) => batch.length + i),
-          metrics: ['distance', 'duration'],
-          units: 'km'
-        })
-      });
-      if (!response.ok) continue;
-      const data = await response.json();
-      batch.forEach((_, i) => {
-        const km = data.distances?.[i]?.[i], seconds = data.durations?.[i]?.[i];
-        if (Number.isFinite(km) && Number.isFinite(seconds)) results[offset + i] = { detourKm: km, detourMinutes: seconds / 60 };
-      });
-    } catch { /* Un lot en échec laisse ses détours non vérifiés. */ }
+    results.push(...await resilientBatch(base, key, chargers.slice(offset, offset + MATRIX_BATCH)));
   }
   return results;
 }

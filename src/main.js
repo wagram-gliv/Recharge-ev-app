@@ -1,6 +1,14 @@
 import { getRoute, getDrivingDetours } from './mapService.js';
-import { getChargersAlongRoute, distanceKm } from './chargerService.js';
+import * as irve from './irveService.js';
+import * as osm from './chargerService.js';
+import { distanceKm } from './chargerService.js';
 import { estimateSocAtDistance } from './calculations.js';
+
+// Sources de bornes : le fichier officiel IRVE (data.gouv.fr) en premier, OpenStreetMap (Overpass) en secours.
+const SOURCES = {
+  irve: { label: 'data.gouv.fr · fichier consolidé IRVE', url: irve.SOURCE_URL, load: irve.getChargersAlongRoute },
+  osm: { label: 'OpenStreetMap (Overpass)', url: 'https://www.openstreetmap.org/copyright', load: osm.getChargersAlongRoute }
+};
 
 // Critère de détour : une borne est retenue si le détour routier depuis l'itinéraire est ≤ 10 km OU ≤ 15 min.
 const MAX_DETOUR_KM = 10;
@@ -24,7 +32,7 @@ const isSlow = (station) => station.powerKw > 0 && station.powerKw < FAST_KW;
 const powerClass = (station) => station.status === 'out' ? 'offline' : isFast(station) ? 'fast' : isSlow(station) ? 'slow' : 'unknown';
 const colors = { offline: '#e05454', fast: '#e8b425', slow: '#3f83e6', unknown: '#8b98a8' };
 const detourLabel = (station) => station.onRoute ? 'Sur l’itinéraire' : `${fmt(station.detourKm, 1)} km · ${fmt(station.detourMinutes)} min`;
-const statusLabel = (station) => station.status === 'out' ? 'Hors service signalée' : 'En service (OSM)';
+const statusLabel = (station) => station.status === 'out' ? 'Hors service signalée' : station.source === 'irve' ? 'Déclarée en service (IRVE)' : 'En service (OSM)';
 
 function renderMap(route, visible) {
   if (!map) {
@@ -57,7 +65,7 @@ function stationCard(station, index) {
   const power = station.powerKw ? `${fmt(station.powerKw)} kW` : 'Puissance inconnue';
   const category = isFast(station) ? 'Recharge rapide' : isSlow(station) ? 'Recharge standard' : 'Puissance à vérifier';
   const fee = station.fee === 'free' ? 'Gratuite indiquée' : station.fee === 'paid' ? 'Payante indiquée' : station.fee === 'mixed' ? 'Tarif variable' : 'Tarif inconnu';
-  const status = station.status === 'out' ? '<span class="bad">Hors service signalée</span>' : '<span class="ok">En service (OSM)</span>';
+  const status = `<span class="${station.status === 'out' ? 'bad' : 'ok'}">${statusLabel(station)}</span>`;
   const count = station.count > 1 ? `<span>${station.count} bornes</span>` : '';
   const soc = station.socAtArrival == null ? '' : `<span class="soc">${fmt(station.socAtArrival)} % estimés à l’arrivée${station.socAtArrival < 10 ? ' · charge faible' : ''}</span>`;
   return `<article class="station-card${station.onRoute ? ' on-route' : ''}" data-id="${escapeHtml(station.id)}">
@@ -65,8 +73,8 @@ function stationCard(station, index) {
     <h4>${escapeHtml(station.name)}</h4><p class="address">${escapeHtml(station.address)}</p>
     <div class="card-badges">${count}<span>${category}</span>${status}<span>Occupation : non disponible</span><span>${fee}</span></div>
     <div class="card-metrics"><div><small>APRÈS LE DÉPART</small><b>${fmt(station.routeKm)} km</b></div><div><small>DÉTOUR DEPUIS LA ROUTE</small><b>${escapeHtml(detourLabel(station))}</b></div></div>${soc}
-    <div class="card-links"><button type="button" class="locate" data-id="${escapeHtml(station.id)}">Voir sur la carte ↗</button><a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(station.lat + ',' + station.lon)}" target="_blank" rel="noopener noreferrer">Y aller ↗</a><a href="${station.sourceUrl}" target="_blank" rel="noopener noreferrer">Fiche OSM ↗</a></div>
-    <p class="association">${escapeHtml(station.association)}${station.operator ? ` · Opérateur : ${escapeHtml(station.operator)}` : ''}${station.connector ? ` · ${escapeHtml(station.connector)}` : ''}</p>
+    <div class="card-links"><button type="button" class="locate" data-id="${escapeHtml(station.id)}">Voir sur la carte ↗</button><a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(station.lat + ',' + station.lon)}" target="_blank" rel="noopener noreferrer">Y aller ↗</a><a href="${station.sourceUrl}" target="_blank" rel="noopener noreferrer">${station.source === 'irve' ? 'Source data.gouv' : 'Fiche OSM'} ↗</a></div>
+    <p class="association">${escapeHtml(station.association)}${station.operator ? ` · Opérateur : ${escapeHtml(station.operator)}` : ''}${station.connector ? ` · ${escapeHtml(station.connector)}` : ''}${station.updatedAt ? ` · MAJ ${escapeHtml(station.updatedAt)}` : ''}</p>
   </article>`;
 }
 
@@ -116,8 +124,19 @@ form.addEventListener('submit', async (event) => {
   try {
     const route = await getRoute(origin, destination);
     if (!route.geometry?.length) throw new Error('Aucun itinéraire trouvé.');
-    setMessage(`Itinéraire de ${fmt(route.distanceKm)} km calculé. Recherche des bornes Lidl dans OpenStreetMap (jusqu’à 40 s)…`);
-    const { stations: candidates, warnings } = await getChargersAlongRoute(route, setMessage);
+    setMessage(`Itinéraire de ${fmt(route.distanceKm)} km calculé. Recherche des bornes Lidl déclarées (data.gouv.fr)…`);
+    let sourceKey = 'irve', loaded;
+    try {
+      loaded = await SOURCES.irve.load(route, setMessage);
+    } catch (error) {
+      sourceKey = 'osm';
+      setMessage(`Source officielle data.gouv.fr indisponible (${error.message}). Recherche dans OpenStreetMap (jusqu’à 40 s)…`, 'warn');
+      loaded = await SOURCES.osm.load(route, setMessage);
+      loaded.warnings.unshift('Source officielle IRVE (data.gouv.fr) indisponible : données OpenStreetMap utilisées.');
+    }
+    const { stations: candidates, warnings } = loaded;
+    const source = SOURCES[sourceKey];
+    $('data-source').innerHTML = `<a href="${source.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label)}</a>`;
     setMessage(`${candidates.length} borne${candidates.length > 1 ? 's' : ''} Lidl repérée${candidates.length > 1 ? 's' : ''} à proximité. Vérification des détours routiers…`);
     const detours = await getDrivingDetours(candidates);
     const geometryKm = route.geometry.slice(1).reduce((sum, point, index) => sum + distanceKm(route.geometry[index], point), 0);
