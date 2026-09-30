@@ -1,0 +1,18 @@
+# Caddy interne du site statique (derrière le Caddy frontal qui gère TLS).
+:80 {
+	root * /srv
+	encode gzip zstd
+
+	# Ne sert que les fichiers de l'application, pas le reste du dépôt (README, deploy/, .git…).
+	@app path / /index.html /styles.css /src/* /vercel.json
+	handle @app {
+		# Les modules JS et la feuille de style peuvent changer à chaque déploiement : pas de cache long.
+		header Cache-Control "no-cache"
+		file_server
+	}
+	handle {
+		rewrite * /index.html
+		header Cache-Control "no-cache"
+		file_server
+	}
+}

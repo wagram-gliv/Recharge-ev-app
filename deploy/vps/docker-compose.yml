@@ -1,0 +1,22 @@
+# Déploiement VPS : site statique servi par un petit Caddy interne (projet `charge`),
+# joint au réseau `app_default` du Caddy frontal partagé, qui fait le TLS et proxifie
+# charge.gliv.fr vers ce conteneur (bloc `charge.gliv.fr` dans le Caddyfile de max-platform).
+#
+#   cd ~/apps/charge && docker compose -f deploy/vps/docker-compose.yml up -d
+#
+# Le dépôt entier est monté en lecture seule ; le Caddyfile local ne sert que index.html,
+# styles.css et src/. Mise à jour = `git pull` (voir deploy/vps/deploy.sh), sans redémarrage.
+services:
+  charge-web:
+    image: caddy:2-alpine
+    container_name: charge-web
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../..:/srv:ro
+    networks:
+      - app_default
+
+networks:
+  app_default:
+    external: true
