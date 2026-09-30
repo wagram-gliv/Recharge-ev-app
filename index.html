@@ -1,49 +1,38 @@
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Recharge EV Planner MVP</title>
-    <link rel="stylesheet" href="styles.css" />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
-  </head>
-  <body>
-    <main class="container">
-      <h1>Prochain point de recharge très rapide</h1>
-      <p class="subtitle">MVP: recommandations en mode sécurisé (15%) et avancé (5%).</p>
-
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#10223d" />
+  <title>Lidl en route · Bornes sur votre trajet</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="brand-mark">↗</span><span>LIDL <b>EN ROUTE</b></span></div><span class="top-note">Planificateur de recharge</span></header>
+  <main>
+    <section class="hero">
+      <div class="hero-copy"><p class="eyebrow">VOTRE TRAJET, VOS HALTES</p><h1>La prochaine recharge<br><em>est sur votre route.</em></h1><p>Repérez les bornes Lidl sur votre itinéraire, leur puissance et le détour à prévoir.</p></div>
+      <div class="hero-art" aria-hidden="true"><div class="road road-one"></div><div class="road road-two"></div><span class="art-pin pin-one">⚡</span><span class="art-pin pin-two">⚡</span><span class="art-pin pin-three">⚡</span><span class="art-car">↗</span></div>
+    </section>
+    <section class="planner-shell" aria-labelledby="plan-title">
+      <div class="section-heading"><span class="step">01</span><div><p class="eyebrow">PLANIFIER</p><h2 id="plan-title">Votre itinéraire</h2></div></div>
       <form id="planner-form" novalidate>
-        <div class="grid">
-          <label>Capacité batterie (kWh)
-            <input type="number" id="batteryCapacity" min="1" step="0.1" required />
-          </label>
-          <label>État de charge actuel (%)
-            <input type="number" id="soc" min="0" max="100" step="0.1" required />
-          </label>
-          <label>Consommation moyenne (kWh/100km)
-            <input type="number" id="consumption" min="0.1" step="0.1" required />
-          </label>
-          <label>Origine
-            <input type="text" id="origin" placeholder="Paris" required />
-          </label>
-          <label>Destination
-            <input type="text" id="destination" placeholder="Lyon" required />
-          </label>
-        </div>
-        <button type="submit">Calculer mon prochain point de recharge</button>
+        <div class="route-inputs"><label><span>Départ</span><input id="origin" autocomplete="street-address" placeholder="Paris, France" value="Paris, France" required /></label><span class="route-arrow">→</span><label><span>Arrivée</span><input id="destination" autocomplete="street-address" placeholder="Lyon, France" value="Lyon, France" required /></label></div>
+        <div class="form-bottom"><details class="vehicle-details"><summary>Ajouter mon véhicule <span>pour estimer la batterie à l’arrivée</span></summary><div class="vehicle-grid"><label>Capacité batterie (kWh)<input type="number" id="batteryCapacity" min="1" step="0.1" value="77" /></label><label>Charge actuelle (%)<input type="number" id="soc" min="0" max="100" step="0.1" value="62" /></label><label>Consommation (kWh/100 km)<input type="number" id="consumption" min="0.1" step="0.1" value="18" /></label></div></details><button id="submit-button" type="submit">Trouver les bornes <span>↗</span></button></div>
       </form>
-
-      <section id="messages"></section>
-      <section id="results" class="results hidden"></section>
-      <div id="map" class="hidden"></div>
-    </main>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script type="module" src="src/main.js"></script>
-  </body>
+      <div id="messages" role="status" aria-live="polite"></div>
+    </section>
+    <section id="results" class="results hidden" aria-labelledby="results-title">
+      <div class="section-heading"><span class="step">02</span><div><p class="eyebrow">EXPLORER</p><h2 id="results-title">Bornes sur votre trajet</h2></div></div>
+      <div class="summary-strip"><div><small>TRAJET</small><strong id="trip-distance">—</strong></div><div><small>BORNES LIDL</small><strong id="station-count">—</strong></div><div><small>SUR L’ITINÉRAIRE</small><strong id="onroute-count">—</strong></div><div><small>CRITÈRE DE DÉTOUR</small><strong>10 km <span>ou</span> 15 min</strong></div></div>
+      <div class="notice">Les bornes affichées sont sur l’itinéraire ou à moins de 10 km / 15 min de route. L’état « en service » ou « hors service » vient d’OpenStreetMap ; l’occupation en temps réel n’est pas disponible. Vérifiez la borne avant de vous y rendre.</div>
+      <div class="explorer"><div class="panel"><div class="panel-head"><h3>Les étapes possibles</h3><span id="visible-count"></span></div><div class="filters" role="group" aria-label="Filtres bornes"><button type="button" class="filter active" data-filter="all">Toutes</button><button type="button" class="filter" data-filter="fast">Rapides ≥ 50 kW</button><button type="button" class="filter" data-filter="slow">Lentes &lt; 50 kW</button><button type="button" class="filter" data-filter="onroute">Sur l’itinéraire</button><button type="button" class="filter" data-filter="free">Gratuites</button><button type="button" class="filter" data-filter="out">Hors service</button></div><div id="station-list" class="station-list"></div></div><div class="map-wrap"><div id="map" role="img" aria-label="Carte de l’itinéraire et des bornes Lidl"></div><div class="map-legend"><span><i class="legend-dot fast"></i>≥ 50 kW</span><span><i class="legend-dot slow"></i>&lt; 50 kW</span><span><i class="legend-dot unknown"></i>Puissance inconnue</span><span><i class="legend-dot offline"></i>Hors service signalée</span><span><i class="legend-dot ring"></i>Sur l’itinéraire</span></div></div></div>
+      <p class="source-note">Données de bornes : <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© contributeurs OpenStreetMap</a>. Associations par nom Lidl ou proximité immédiate d’un magasin Lidl. Données communautaires, sans garantie de disponibilité.</p>
+    </section>
+  </main>
+  <footer>Rechargez l’esprit léger. Vérifiez toujours les informations de la borne avant le détour.</footer>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="src/main.js"></script>
+</body>
 </html>

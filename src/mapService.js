@@ -1,6 +1,6 @@
 import { APP_CONFIG } from './config.js';
 
-const DEFAULT_ORS_BASE = 'https://api.heigit.org';
+const DEFAULT_ORS_BASE = 'https://api.openrouteservice.org';
 
 function resolveBaseUrl() {
   const raw = APP_CONFIG.ORS_BASE_URL || window.__APP_CONFIG__?.ORS_BASE_URL || DEFAULT_ORS_BASE;
@@ -40,6 +40,40 @@ async function route(startLonLat, endLonLat) {
     geometry: feat.geometry.coordinates,
     distanceKm: feat.properties.summary.distance / 1000
   };
+}
+
+// Détour routier (point d'ancrage sur la route → borne) pour chaque candidate, via l'API Matrix d'ORS :
+// une seule requête par lot de 25 paires au lieu d'une requête Directions par borne (quota gratuit ≈ 40-50/min).
+const MATRIX_BATCH = 25;
+
+export async function getDrivingDetours(chargers) {
+  const key = resolveKey();
+  const base = resolveBaseUrl();
+  if (!key) throw new Error('NO_ORS_KEY');
+  const results = new Array(chargers.length).fill(null);
+  for (let offset = 0; offset < chargers.length; offset += MATRIX_BATCH) {
+    const batch = chargers.slice(offset, offset + MATRIX_BATCH);
+    try {
+      const response = await fetch(`${base}/v2/matrix/driving-car`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: key },
+        body: JSON.stringify({
+          locations: [...batch.map((c) => c.anchor), ...batch.map((c) => [c.lon, c.lat])],
+          sources: batch.map((_, i) => i),
+          destinations: batch.map((_, i) => batch.length + i),
+          metrics: ['distance', 'duration'],
+          units: 'km'
+        })
+      });
+      if (!response.ok) continue;
+      const data = await response.json();
+      batch.forEach((_, i) => {
+        const km = data.distances?.[i]?.[i], seconds = data.durations?.[i]?.[i];
+        if (Number.isFinite(km) && Number.isFinite(seconds)) results[offset + i] = { detourKm: km, detourMinutes: seconds / 60 };
+      });
+    } catch { /* Un lot en échec laisse ses détours non vérifiés. */ }
+  }
+  return results;
 }
 
 export async function getRoute(origin, destination) {
