@@ -53,7 +53,7 @@ Mise à jour après un push sur `main` :
 ```bash
 ssh deploy@51.75.143.97 ~/apps/charge/deploy/vps/deploy.sh
 ```
-Le bloc `charge.gliv.fr { tls internal … reverse_proxy charge-web:80 }` est dans le Caddyfile frontal. Le domaine est proxifié par Cloudflare (mode Full) : le défi ACME HTTP est redirigé par Cloudflare, d'où le certificat interne côté origine. Si le DNS passe en « DNS only », retirer `tls internal` pour obtenir un certificat Let's Encrypt (`docker exec app-caddy-1 caddy reload --config /etc/caddy/Caddyfile`).
+Le bloc `charge.gliv.fr { … reverse_proxy charge-web:80 }` est dans le Caddyfile frontal ; le DNS est en « DNS only » (pas de proxy Cloudflare), Caddy obtient et renouvelle le certificat Let's Encrypt automatiquement (défi HTTP-01). Si un jour le domaine passe derrière le proxy Cloudflare, le défi HTTP sera redirigé : ajouter `tls internal` (mode Full) ou un certificat Origin CA, puis `docker exec app-caddy-1 caddy reload --config /etc/caddy/Caddyfile`.
 
 ## Déploiement Vercel
 Site statique : **Framework Preset** = `Other`, **Root Directory** = `.`, Build/Output vides. `vercel.json` force le fallback vers `index.html`.
